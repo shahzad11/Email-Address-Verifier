@@ -6,7 +6,7 @@
  * SMTP server communication, blacklist, SPF, and DKIM records.
  * Author: Shahzad Ahmad Mirza
  * Author Website: https://shahzadmirza.com
- */
+ */ 
 class EmailVerifier {
     private $email;              // Stores the email address to be verified.
     private $domain;             // Extracted domain part of the email address.

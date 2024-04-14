@@ -92,7 +92,7 @@ When you call the `verify()` method on an instance of the `EmailVerifier`, it re
 
 Here's an example of how the response might look:
 
-```php
+```
 Array
 (
     [response] => Array
@@ -120,10 +120,7 @@ Array
                 )
         )
 )
+```
 
 ## License
 This library is released under the MIT license. See the LICENSE file for more details.
-
-```
-This content is formatted in Markdown and includes code blocks, links, and other formatting elements appropriate for a README file on platforms like GitHub, GitLab, or Bitbucket.
-```

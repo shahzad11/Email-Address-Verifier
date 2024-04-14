@@ -6,4 +6,5 @@ $verifier = new EmailVerifier($email);
 $response = $verifier->verify();
 print_r($response);
 
+
 ?>
