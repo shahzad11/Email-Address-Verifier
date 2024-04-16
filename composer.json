@@ -1,0 +1,21 @@
+{
+	"name": "rizwan_47/email-address-verifier",
+	"description": "A PHP library for verifying email addresses, ensuring they are valid and reachable. This package provides a straightforward class for email validation processes.",
+	"type": "library",
+	"require": {
+		"php": "^7.4 || ^8.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"rizwan_47\\EmailVerifier\\": "src/"
+		}
+	},
+	"authors": [
+		{
+			"name": "Rizwan",
+			"email": "hi@iamrizwan.me"
+		}
+	],
+	"minimum-stability": "stable",
+	"license": "MIT"
+}
