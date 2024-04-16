@@ -142,6 +142,27 @@ class EmailVerifier {
 	 */
 	private function smtpCheck($email) {
 
+		// Popular Email SMTP servers that don't need port open checks
+		$whitelist = [
+			'aspmx.l.google.com'			=> 'Google Workspace (Gmail for Business)',
+			'alt1.aspmx.l.google.com'		=> 'Google Workspace (Gmail for Business)',
+			'alt2.aspmx.l.google.com'		=> 'Google Workspace (Gmail for Business)',
+			'alt3.aspmx.l.google.com'		=> 'Google Workspace (Gmail for Business)',
+			'alt4.aspmx.l.google.com'		=> 'Google Workspace (Gmail for Business)',
+			'mx1.mailbox.org'				=> 'Mailbox.org',
+			'outlook.com'					=> 'Microsoft Outlook',
+			'mail.protection.outlook.com'	=> 'Office 365',
+			'mx1.smtp.exchangelabs.com'		=> 'Office 365',
+			'mx.yandex.net'					=> 'Yandex Mail',
+			'mx.zoho.com'					=> 'Zoho Mail'
+		];
+
+		$difference = array_diff($this->mxRecords, array_keys($whitelist));
+
+		// All MX records are in the whitelist, we can safely mark this "passed"
+		if( empty($difference) )
+			return 'passed';
+
 		foreach ($this->mxRecords as $mxRecord) {
 			$port = $this->detectSmtpPort($mxRecord); // Detect the appropriate SMTP port
 
