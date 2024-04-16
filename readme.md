@@ -16,16 +16,19 @@ The EmailVerifier library is designed to facilitate comprehensive email validati
 
 
 ## Installation
-To use EmailVerifier in your project, include the EmailVerifier class in your PHP script. No additional libraries or installations are required, making it straightforward to integrate and deploy.
+To use EmailVerifier in your project, install the package via composer:
 
-```php
-require_once 'path/to/EmailVerifier.php';
+```bash
+composer require rizwan_47/email-address-verifier
 ```
 ## Usage
 Here is a simple example demonstrating how to use the EmailVerifier library to verify an email address:
 
-```
-require_once 'EmailVerifier.php';
+```php
+<?php
+use rizwan_47\EmailVerifier\EmailVerifier;
+
+require __DIR__ . '/vendor/autoload.php';
 
 $email = 'contact@example.com';
 $verifier = new EmailVerifier($email);
