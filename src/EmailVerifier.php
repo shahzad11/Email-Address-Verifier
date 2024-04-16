@@ -244,9 +244,8 @@ class EmailVerifier {
 						return $port; // Return on first successful connection
 					}
 					fclose($response);
-				} else {
-					echo "Failed to connect on $protocol$port. Error: $errstr\n";
 				}
+
 			}
 		}
 	
