@@ -48,10 +48,15 @@ class EmailVerifier {
 	 * @param string $email The email address to be verified.
 	 */
 	public function __construct($email) {
+
 		$this->email = $email;
 		$this->domain = substr(strrchr($email, "@"), 1);
+
+		$mxRecords = [];
 		getmxrr($this->domain, $mxRecords);
+
 		$this->mxRecords = $mxRecords;
+
 	}
 
 
@@ -211,51 +216,42 @@ class EmailVerifier {
 	 */
 	private function detectSmtpPort($mxRecord) {
 
-		$ports = [25, 587, 465]; // Ports to check
-		$timeout = 10; // Timeout in seconds
-
+		$ports = [25, 465, 587, 2525]; // SMTP ports
+		$timeout = 5; // Reduced timeout further to 5 seconds
+	
 		foreach ($ports as $port) {
-
-			$context = stream_context_create([
-				'ssl' => [
-					'verify_peer' => false,
-					'verify_peer_name' => false,
-				]
-			]);
-
-			// Try both non-encrypted and SSL/TLS contexts
-			foreach ([null, $context] as $contextOption) {
-				$protocol = ($contextOption === $context) ? "ssl://" : "tcp://";
+			$protocols = ($port === 465) ? ["ssl://"] : 
+						 ($port === 25 ? ["tcp://"] : 
+						 ["tcp://", "ssl://"]); // Skip SSL on port 25
+	
+			foreach ($protocols as $protocol) {
 				$serverAddress = $protocol . $mxRecord . ":" . $port;
-
-				$response = @stream_socket_client($serverAddress, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT, $contextOption);
+				$response = @stream_socket_client($serverAddress, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
+				
 				if ($response) {
 					stream_set_timeout($response, $timeout);
 					$banner = fgets($response, 1024);
-
-					// Send EHLO command to check for STARTTLS support
+	
 					fwrite($response, "EHLO detectport\r\n");
 					$ehloResponse = '';
 					while ($str = fgets($response, 1024)) {
 						$ehloResponse .= $str;
-						if (substr($str, 3, 1) == " ") break; // Read until the last response line
+						if (substr($str, 3, 1) == " ") break; // Last line of response
 					}
-
-					// Check if the server response indicates STARTTLS or if it's an encrypted connection
+	
 					if (strpos($ehloResponse, '250-STARTTLS') !== false || $protocol === "ssl://") {
 						fclose($response);
-						$this->smtp_ports[] = $port;
-						return $port; // Return the port if STARTTLS is available or connection is already secure
+						return $port; // Return on first successful connection
 					}
-
 					fclose($response);
+				} else {
+					echo "Failed to connect on $protocol$port. Error: $errstr\n";
 				}
 			}
-
 		}
+	
+		return null; // No open ports found
 
-		return null; // No suitable port found
-		
 	}
 
 
