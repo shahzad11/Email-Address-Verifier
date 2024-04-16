@@ -34,10 +34,11 @@ class EmailVerifier {
 	private $weights = [
 		'syntax_check' => 1,
 		'domain_check' => 2,
-		'smtp_check' => 3,
-		'blacklist_check' => 4,
-		'spf_check' => 2,
-		'dkim_check' => 2,
+		'smtp_check' => 2,
+		// 'blacklist_check' => 4,
+		'spf_check' => 1,
+		'dkim_check' => 1,
+		'tentative_email_deliverability' => 3
 	];
 
 
@@ -74,6 +75,7 @@ class EmailVerifier {
 			'smtp_check' => $this->smtpCheck($this->email),
 			'spf_check' => $this->spfCheck(),
 			'dkim_check' => $this->dkimCheck(),
+			'tentative_email_deliverability' => $this->tentativeEmailDeliverability($this->email)
 		];
 
 		$score = 0;
@@ -154,7 +156,10 @@ class EmailVerifier {
 			'mail.protection.outlook.com'	=> 'Office 365',
 			'mx1.smtp.exchangelabs.com'		=> 'Office 365',
 			'mx.yandex.net'					=> 'Yandex Mail',
-			'mx.zoho.com'					=> 'Zoho Mail'
+			'mx.zoho.com'					=> 'Zoho Mail',
+			'route1.mx.cloudflare.net'		=> 'Cloudways Email Routing',
+			'route3.mx.cloudflare.net'		=> 'Cloudways Email Routing',
+			'route2.mx.cloudflare.net'		=> 'Cloudways Email Routing'
 		];
 
 		$difference = array_diff($this->mxRecords, array_keys($whitelist));
@@ -313,6 +318,44 @@ class EmailVerifier {
 
 		return 'failed';
 
+	}
+
+
+	/**
+	 * Tentative Email Deliverability Check
+	 * 
+	 * @param string $email Email address to check
+	 * 
+	 * @return string 'passed' if connection is success, 'failed' otherwise.
+	 */
+
+	private function tentativeEmailDeliverability($email) {
+
+		list($user, $domain) = explode('@', $email);
+		$mxRecords = dns_get_mx($domain, $mxhosts);
+		if (count($mxhosts) === 0) return "failed";
+	
+		$smtpHost = $mxhosts[0]; // Use the primary MX record
+		$connection = fsockopen($smtpHost, 25, $errno, $errstr, 3); // 3 seconds timeout
+		if (!$connection) return "failed";
+	
+		stream_set_timeout($connection, 3); // Set timeout for reading/writing operations
+	
+		fputs($connection, "HELO emailcheck.com\r\n"); // Greeting
+		if (!$response = fgets($connection, 1024)) return "failed"; // Server response
+	
+		fputs($connection, "MAIL FROM: <check@emailcheck.com>\r\n"); // MAIL FROM
+		if (!$response = fgets($connection, 1024)) return "failed"; // Response after MAIL FROM
+	
+		fputs($connection, "RCPT TO: <$email>\r\n"); // RCPT TO
+		if (!$response = fgets($connection, 1024)) return "failed"; // Response after RCPT TO
+	
+		// Check if the recipient is valid
+		$isValid = !preg_match("/^5\d\d\s/", $response);
+		fclose($connection);
+	
+		return $isValid ? "passed" : "failed";
+	
 	}
 
 }
