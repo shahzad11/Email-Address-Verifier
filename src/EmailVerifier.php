@@ -102,14 +102,8 @@ class EmailVerifier {
 	 * 
 	 * @return array|string MX records if available or error message if not.
 	 */
-	private function getMXRecords(){
-
-		if ($this->mxRecords) {
-			return $this->mxRecords;
-		} else {
-			return "Failed to retrieve MX records for $this->domain";
-		}
-
+	private function getMXRecords() {
+		return $this->mxRecords ? $this->mxRecords : "Failed to retrieve MX records for $this->domain";
 	}
 
 
@@ -243,36 +237,21 @@ class EmailVerifier {
 	private function detectSmtpPort($mxRecord) {
 
 		$ports = [25, 465, 587, 2525]; // SMTP ports
-		$timeout = 5; // Reduced timeout further to 5 seconds
-	
+		$timeout = 1.7; // Reduced timeout to 1.7 seconds
+
 		foreach ($ports as $port) {
-			$protocols = ($port === 465) ? ["ssl://"] : 
-						 ($port === 25 ? ["tcp://"] : 
-						 ["tcp://", "ssl://"]); // Skip SSL on port 25
-	
+			$protocols = ($port === 465) ? ["ssl://"] : ["tcp://"];
 			foreach ($protocols as $protocol) {
 				$serverAddress = $protocol . $mxRecord . ":" . $port;
 				$response = @stream_socket_client($serverAddress, $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
-				
-				if ($response) {
-					stream_set_timeout($response, $timeout);
-					$banner = fgets($response, 1024);
-	
-					fwrite($response, "EHLO detectport\r\n");
-					$ehloResponse = '';
-					while ($str = fgets($response, 1024)) {
-						$ehloResponse .= $str;
-						if (substr($str, 3, 1) == " ") break; // Last line of response
-					}
-	
-					if (strpos($ehloResponse, '250-STARTTLS') !== false || $protocol === "ssl://") {
-						fclose($response);
-						return $port; // Return on first successful connection
-					}
-					fclose($response);
-				}
 
+				if ($response) {
+					fclose($response);
+					return $port;
+				}
 			}
+
+
 		}
 	
 		return null; // No open ports found
@@ -288,14 +267,31 @@ class EmailVerifier {
 	 */
 	private function spfCheck() {
 
-		$record = dns_get_record($this->domain, DNS_TXT);
-		foreach ($record as $entry) {
-			if (strpos($entry['txt'], 'v=spf1') === 0) {
-				return 'passed';
-			}
+		$host = $this->domain;
+		$timeout = 1; // Timeout in seconds
+
+		$dnsQuery = "\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00";
+		$dnsQuery .= implode('', array_map('chr', array_merge(
+			array_map('ord', str_split($host)),
+			[0, 0, 16, 0, 1]
+		)));
+
+		$socket = stream_socket_client("udp://8.8.8.8:53", $errno, $errstr, $timeout);
+		if (!$socket) {
+			return 'failed';
 		}
 
-		return 'failed';
+		fwrite($socket, $dnsQuery);
+		stream_set_timeout($socket, $timeout);
+		$response = fread($socket, 512);
+		fclose($socket);
+
+		if ($response === false) {
+			return 'failed';
+		}
+
+		$spfRecord = strpos($response, 'v=spf1');
+		return $spfRecord !== false ? 'passed' : 'failed';
 
 	}
 
@@ -308,10 +304,14 @@ class EmailVerifier {
 	 */
 	private function dkimCheck() {
 
-		$selector = 'default'; // Change this to the actual selector used by the domain
-		$record = dns_get_record($selector . '._domainkey.' . $this->domain, DNS_TXT);
+		$selector = 'default';
+		$record = @dns_get_record($selector . '._domainkey.' . $this->domain, DNS_TXT);
+		if ($record === false) {
+			return 'failed';
+		}
+
 		foreach ($record as $entry) {
-			if (strpos($entry['txt'], 'v=DKIM1') !== false) {
+			if (isset($entry['txt']) && strpos($entry['txt'], 'v=DKIM1') !== false) {
 				return 'passed';
 			}
 		}
@@ -328,32 +328,31 @@ class EmailVerifier {
 	 * 
 	 * @return string 'passed' if connection is success, 'failed' otherwise.
 	 */
-
 	private function tentativeEmailDeliverability($email) {
 
 		list($user, $domain) = explode('@', $email);
-		$mxRecords = dns_get_mx($domain, $mxhosts);
+		$mxhosts = [];
+		getmxrr($domain, $mxhosts);
 		if (count($mxhosts) === 0) return "failed";
-	
-		$smtpHost = $mxhosts[0]; // Use the primary MX record
-		$connection = fsockopen($smtpHost, 25, $errno, $errstr, 3); // 3 seconds timeout
+
+		$smtpHost = $mxhosts[0];
+		$connection = fsockopen($smtpHost, 25, $errno, $errstr, 1); // 1 second timeout
 		if (!$connection) return "failed";
-	
-		stream_set_timeout($connection, 3); // Set timeout for reading/writing operations
-	
-		fputs($connection, "HELO emailcheck.com\r\n"); // Greeting
-		if (!$response = fgets($connection, 1024)) return "failed"; // Server response
-	
-		fputs($connection, "MAIL FROM: <check@emailcheck.com>\r\n"); // MAIL FROM
-		if (!$response = fgets($connection, 1024)) return "failed"; // Response after MAIL FROM
-	
-		fputs($connection, "RCPT TO: <$email>\r\n"); // RCPT TO
-		if (!$response = fgets($connection, 1024)) return "failed"; // Response after RCPT TO
-	
-		// Check if the recipient is valid
+
+		stream_set_timeout($connection, 1);
+
+		fputs($connection, "HELO emailcheck.com\r\n");
+		if (!$response = fgets($connection, 1024)) return "failed";
+
+		fputs($connection, "MAIL FROM: <check@emailcheck.com>\r\n");
+		if (!$response = fgets($connection, 1024)) return "failed";
+
+		fputs($connection, "RCPT TO: <$email>\r\n");
+		if (!$response = fgets($connection, 1024)) return "failed";
+
 		$isValid = !preg_match("/^5\d\d\s/", $response);
 		fclose($connection);
-	
+
 		return $isValid ? "passed" : "failed";
 	
 	}
